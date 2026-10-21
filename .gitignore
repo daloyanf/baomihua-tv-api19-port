@@ -1,0 +1,15 @@
+# 构建产物与本地环境
+work/
+out/
+*.apk
+*.idsig
+*.so
+*.o
+*.jks
+*.keystore
+*.pass
+__pycache__/
+*.pyc
+
+# 设备快照
+devlib/
