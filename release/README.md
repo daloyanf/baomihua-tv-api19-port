@@ -1,14 +1,54 @@
 # 发布说明
 
-当前最新：**v1.2.0**（2026-10-22）
+当前最新：**v1.3.0**（2026-10-23）
 
 | 版本 | 日期 | 阶段 | 状态 |
 | --- | --- | --- | --- |
-| [v1.2.0](#v120--画面显示修复2026-10-22) | 2026-10-22 | 画面显示 | 最新 |
+| [v1.3.0](#v130--播放渲染--点击播放修复2026-10-23) | 2026-10-23 | 播放修复 | 最新（待真机复验） |
+| [v1.2.0](#v120--画面显示修复2026-10-22) | 2026-10-22 | 画面显示 | 历史 |
 | [v1.1.0](#v110--播放链路打通2026-10-21) | 2026-10-21 | 播放链路 | 历史 |
 | [v1.0.0](#v100--api19-引导2026-10-21) | 2026-10-21 | API19 引导 | 历史（不可正常播放） |
 
 ---
+
+## v1.3.0 — 播放渲染 / 点击播放修复（2026-10-23）
+
+| 项目 | 内容 |
+| --- | --- |
+| 文件 | `baomihua-tv-2.6.22-api19-1.3.0.apk` |
+| 大小 | 33,774,309 字节 |
+| sha256 | `c0023b71a19167875b824044598cf215b847137d810559fe17bb934a8de3c886` |
+| 基于 | v1.2.0（替换 `classes.dex` / `classes3.dex`，另换一个 drawable） |
+| 签名 | 与 v1.2.0 相同（`CN=walldav`），可直接覆盖安装 |
+
+### 这个版本做了什么
+
+- **花屏 + 卡顿**：服务端 `play_params.renderer` 可能是 `soft_gles2`，客户端据此
+  加 `--vout=gles2 --glconv=none`，强制软解且不做色彩转换。v1.3.0 固定
+  `renderer=direct`，忽略服务端 `decoder_score_list`，并过滤服务端
+  `extra_options` 里的 `--vout=` / `--glconv=` / `--no-mediacodec` / `--codec=`。
+- **详情页播放没反应**：有 `File` 时优先走 `PlayerActivity.a.e(File)`，与
+  “最近观看”同一条路径；`MediaFile` 分支仅在没有 `File` 时使用。
+- **片库点视频没反应**：`OtherCover` 带 `File` 时直接起播，不再绕详情页。
+- **详情页在 API19 上直接崩**：修掉 `BottomSheetBehavior` 的 `VerifyError`
+  （`MotionCompat` 漏 float 常量）、`o0.r0$c$a` 的 `NoClassDefFoundError`、
+  `j5/b` 的 Path/String 类型错误；并把 `ic_chevron_down` 改成 PNG、
+  给 `ResCompat` 加 vector 回退（`crew_empty_dark` 等 Glide 占位图）。
+
+### 验证（H1 真机，2026-10-24）
+
+- 片库点海报 → 详情页正常打开（不再 VerifyError/闪退）；
+- 4K H.264 片源可播放；`screenrecord` 抓帧画面正常，**无花屏**；
+- 该 4K 片源 VLC 仍走 **FFmpeg 软解 3840×2160**（CPU 约 78%），所以 4K 会卡顿。
+  H1 的 `OMX.hisi.video.decoder.avc` 存在，但 VLC 3.0.21 在 API19 上没接管
+  MediaCodec（强制 `--mediacodec` / `--codec=mediacodec,avcodec` 均无效）。
+- 声音流畅、视频卡是预期的：音频解码开销小，4K 软解是瓶颈。4K 建议切 1080p
+  版本；要 4K 硬解需要换播放器（ExoPlayer）或新盒子。
+- 部分“最近观看”报“网络异常…WebDAV 地址正确”，是片源不可达，与补丁无关。
+
+> API19 x86 模拟器另外验证了 `BottomSheetBehavior` / `SideSheetBehavior` /
+> `j5.b` / `o0.r0$c` / `ResCompat` / `h7.e0` / `adapter.cover.a$a` /
+> `PlayerActivity` / `h`（VlcPlayerImpl）的 Dalvik 类校验全部通过。
 
 ## v1.2.0 — 画面显示修复（2026-10-22）
 
@@ -94,7 +134,7 @@
 ```bash
 # 必须先卸载官方版（签名不同，直接 -r 会失败）
 adb uninstall com.netease.filmlytv
-adb install baomihua-tv-2.6.22-api19-1.2.0.apk
+adb install baomihua-tv-2.6.22-api19-1.3.0.apk
 ```
 
 首次启动需要手机扫码登录；登录态、片库缓存在重装同签名包时会保留。

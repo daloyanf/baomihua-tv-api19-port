@@ -87,6 +87,29 @@ KEYSTORE_PASS_FILE=$HOME/.android-keys/my.pass \
 然后 zipalign + apksigner。原因与验证见 [troubleshooting.md](troubleshooting.md)
 的 v1.2.0 一节。
 
+## 阶段四（v1.3.0）：播放渲染 / 点击播放修复
+
+```bash
+BASE=/path/to/baomihua-1.2.0.apk \
+KEYSTORE=$HOME/.android-keys/walldav.jks \
+KEYSTORE_PASS_FILE=$HOME/.android-keys/walldav.pass \
+./patches/04-fixes/build.sh
+```
+
+脚本替换 `classes.dex` / `classes3.dex`，另做一处 drawable 资源替换：
+
+1. `IPlayer$b.a()` 固定 `renderer=direct`、`no_drop_late_frames=false`，并忽略服务端
+   `decoder_score_list`（保留内置 OMX 硬解评分表）；
+2. `h7.e0` 在详情页有 `File` 时优先走 `PlayerActivity.a.e(File)`；
+3. `adapter/cover/a$a` 对带 `File` 的 `OtherCover` 固定使用直连播放 presenter；
+4. `BottomSheetBehavior` / `SideSheetBehavior` / `j5/b` / `o0/r0$c` 的 API19
+   校验与运行修复（`MotionCompat` 常量、API21 insets 分支、Path 转换）；
+5. `ResCompat` 在 vector XML 加载失败时回退 `VectorDrawableCompat`；
+6. 把 `ic_chevron_down` 从 vector XML 换成 25x24 PNG（改 `resources.arsc` 路径）。
+
+签名证书与 v1.2.0 相同，可直接 `adb install -r` 覆盖，登录态与缓存保留。
+原因与验证建议见 [patches/04-fixes/README.md](../patches/04-fixes/README.md)。
+
 ## 签名
 
 ```bash

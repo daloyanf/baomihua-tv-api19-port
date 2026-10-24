@@ -43,6 +43,86 @@
 脚本见 `patches/03-display/`。验证：`uiautomator dump` 里出现 `surface_video`；
 `dumpsys SurfaceFlinger` 出现独立 `SurfaceView` 图层（1920x1080、RGBX_8888、HWC overlay）。
 
+## 画面花 + 卡顿（v1.3.0）
+
+**现象**：播放时画面有明显色块/噪点，帧率不稳，4K/HEVC 尤其明显。
+声音正常，进度也在走。
+
+**定位**：应用会把服务端 `play_params` 的 `renderer` 直接传给 VLC。若服务端对
+API19 设备下发 `soft_gles2`，`PlayerActivity` 会追加：
+
+```
+--vout=gles2 --glconv=none
+```
+
+`--vout=gles2` 会绕开 MediaCodec 直出，VLC 退回软解；`--glconv=none` 又不做
+YUV→RGB 色彩转换，海思平台上的结果就是花屏 + 卡顿。
+
+**修法**（v1.3.0）：在 `IPlayer$b.a()` 里把 `renderer` 固定成 `direct`，同时：
+
+- `no_drop_late_frames=false`，避免软解时堆帧；
+- 忽略服务端 `decoder_score_list`，保留应用内置的 OMX 硬解评分表。
+
+**怎么确认**：VLC 日志在应用私有目录
+`/data/data/com.netease.filmlytv/files/feedbacks/app/vlc-*.txt`（需要 root 或
+可调试包才能直接读）。搜 `playWithArg` 行：v1.3.0 之后不应再出现
+`--vout=gles2` / `--glconv=none`；`codec` 相关行应出现 `mediacodec` 或设备
+OMX 解码器名，而不是 `avcodec`。
+
+## 片库点视频不能播 / 只能从最近观看进入（v1.3.0）
+
+**现象**：片库海报点下去没反应，或进了详情页但播放按钮不起播；“最近观看”里的
+同一条目可以正常播。
+
+**两条链路不同**：
+
+| 入口 | 调用 |
+| --- | --- |
+| 最近观看 | `PlayerActivity.a.e(File)` |
+| 详情页播放按钮 | `MediaFile` 非空时 `PlayerActivity.a.c(Source, MediaFile, File)` |
+| 片库 OtherCover | 选择器决定 `o6.k`（直接播）或 `o6.f`（进详情） |
+
+v1.3.0 的修改：
+
+- 详情页有 `File` 时一律走 `a.e(File)`，与最近观看完全一致；
+- `OtherCover` 只要 `getFile() != null` 就直接播，不再进详情页；
+- `File` 为空、`MediaFile` 非空时才保留原来的 `a.c(...)` 路径。
+
+**更主要的原因（真机 2026-10-23）**：详情页本身在 API19 上就崩，所以点击看似
+“没反应”。`VideoDetailActivity.onCreate` 依次踩到：
+
+- `BottomSheetBehavior` 的 `VerifyError`（`MotionCompat` 调用漏了 float 常量）；
+- SDK<30 insets 动画分支 `new-instance o0.r0$c$a` → `NoClassDefFoundError`；
+- `View.setOnApplyWindowInsetsListener`（API21）→ `NoSuchMethodError`；
+- `j5/b` 把 String 直接传给 `MotionCompat.b(Path)`；
+- `ic_chevron_down` / `crew_empty_dark` 等 vector drawable 在 4.4 上无法加载
+  （`invalid drawable tag vector`）。
+
+v1.3.0 的修法见 `patches/04-fixes/README.md`（补常量、跳过 API21 分支、
+chevron 换 PNG、`ResCompat` 加 `VectorDrawableCompat` 回退）。判断方法：
+`adb logcat` 里搜 `AndroidRuntime` / `VerifyError` / `InflateException` /
+`invalid drawable tag vector`。
+
+如果升级后仍不能播，优先查详情页是否卡在“加载失败”/骨架屏：那说明详情数据
+本身没取到（网络/接口），与播放链路无关。
+
+## 4K 软解卡顿（H1，2026-10-24）
+
+**现象**：4K 片源声音流畅、视频卡顿；`screenrecord` 抓帧画面正常，没有花屏。
+
+**定位**：H1 有硬件解码器（`OMX.hisi.video.decoder.avc` / `hevc`），但 VLC
+3.0.21 在 API19 上仍走 **FFmpeg 软解**（日志 `[h264 @ ...] Reinit context to
+3840x2160, pix_fmt: yuv420p`），CPU 约 78%。强制 `--mediacodec` /
+`--mediacodec-dr` / `--mediacodec-prefered=jni` / `--codec=mediacodec,avcodec`
+都没有让 VLC 接管 MediaCodec；`libvlc.so` 自带 MediaCodec 模块，但该海思/
+API19 组合下未生效。音频解码开销小，所以声音一直流畅。
+
+**建议**：
+
+- 4K 片源在播放器“清晰度”里切 1080p（软解 1080p 可流畅）；
+- 需要 4K 硬解只能换播放器（ExoPlayer 直接走 MediaCodec）或换新盒子；
+- 不要再用 `--vout=gles2 --glconv=none`：它会让画面花（v1.3.0 已移除）。
+
 ## UI 自动化
 
 - `uiautomator dump` 偶尔会挂住，命令一定加 `timeout`。

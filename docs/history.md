@@ -7,6 +7,7 @@
 | v1.0.0 | 2026-10-21 | 阶段一：API19 引导 | 能安装、启动、扫码登录、加载片库/海报墙 |
 | v1.1.0 | 2026-10-21 | 阶段二：播放链路 | libvlc 加载、H.264 解码、音频、暂停/续播/选集 |
 | v1.2.0 | 2026-10-22 | 阶段三：画面显示 | 画布改 SurfaceView，修复电视端黑屏/只在 UI 处露画面 |
+| v1.3.0 | 2026-10-23 | 阶段四：播放修复 | 固定 renderer=direct（修花屏/卡顿）、详情页优先 File 直连、OtherCover 直接播 |
 
 > 早期内部称呼里的 v1/v2/v4 已废弃：v1 → v1.0.0，v2 → v1.1.0，v4 → v1.2.0。
 > 当时的 v3 是一次未生效的中间构建（只改默认画布值、被配置覆盖），没有单独发布。
@@ -26,6 +27,28 @@
   露出画面，而 `screenrecord` 抓帧完整 → 确认 `screenrecord` 走虚拟显示 GPU 合成，
   不代表电视 HWC/OSD 输出；播放器用 `TextureView` 把视频画进应用窗口，视频区域不随帧
   上屏。画布改 `SurfaceView`（独立 HWC 图层）后恢复；补丁见 `patches/03-display/`。
+- **2026-10-23（阶段四，v1.3.0）**：真机反馈「画面花 + 卡顿」「片库点视频无法观看，
+  只能从最近观看进入」。代码定位到三处：
+  ① 服务端 `play_params` 的 `renderer` 可能为 `soft_gles2`，客户端据此加
+  `--vout=gles2 --glconv=none`，强制软解 + 无色彩转换；改为固定 `direct`，
+  并忽略服务端 `decoder_score_list`，保留内置 OMX 硬解优先级。
+  ② 详情页播放按钮在 `MediaFile` 非空时走 `PlayerActivity.a.c(...)`，与最近观看的
+  `a.e(File)` 不同；改为有 `File` 一律走 `a.e(File)`。
+  ③ 片库 `OtherCover` 选择器原本按行类型决定「直接播/进详情」，改为只要
+  `getFile() != null` 就直接播。
+  真机进一步确认「点视频没反应」其实是**详情页在 API19 上直接崩**：
+  `BottomSheetBehavior` 的 `MotionCompat` 调用漏了 float 常量（`VerifyError`）、
+  SDK<30 的 insets 动画回调 `new-instance o0.r0$c$a`（`NoClassDefFoundError`）、
+  `j5/b` 把 String 当 Path、以及 `ic_chevron_down` / `crew_empty_dark` 等
+  vector drawable 在 4.4 上无法加载。v1.3.0 补回常量、跳过 API21 分支、
+  把 chevron 换成 PNG、给 `ResCompat` 加 `VectorDrawableCompat` 回退。
+  补丁见 `patches/04-fixes/`；API19 模拟器上关键类已通过 Dalvik 校验。
+  **H1 真机复验（2026-10-24）**：片库点海报 → 详情页正常打开；4K H.264
+  可播放，`screenrecord` 抓帧画面正常、无花屏；但 VLC 仍走 FFmpeg 软解
+  3840×2160（CPU 约 78%），4K 卡顿。H1 有 `OMX.hisi.video.decoder.avc`
+  硬解，但 VLC 3.0.21 在 API19 上未接管 MediaCodec（强制
+  `--mediacodec` / `--codec=mediacodec,avcodec` 均无效）。音频解码开销小，
+  所以“声音流畅、视频卡”。4K 建议切 1080p 版本；要 4K 硬解需换播放器或盒子。
 
 ## 阶段一（v1.0.0）验证数据（供参考）
 
