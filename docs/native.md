@@ -110,3 +110,13 @@ v1 还处理过另一批缺失符号（`__read_chk`、`rand/srand`、`strtof/str
 
 这部分产物叫 `libcompatshim.so`，与阶段二（v1.1.0）的 `libcompat.so` 是两套，互不替代。
 如果你从官方包自己走一遍 v1，需要自己重建这套（见 docs/history.md）。
+
+## v1.4.0 之后：不再需要 libcompat（但文件仍在包里）
+
+v1.4.0 把 `libvlc.so` / `libvlcjni.so` 换成了官方 VLC 3.6.2 的构建，官方库为
+Android 4.1+ 编译、自带兼容处理，**不再依赖 `libcompat.so` / `libcompatshim.so`**。
+这两个垫片与它们的 NEEDED 改写仍留在安装包里（无害、不再被加载链引用），
+仅作为历史补丁的产物；`shim/libcompat.c` 的构建流程只在重建 v1.1.0~v1.3.0
+时需要。替换后的接口差异（9 个 JNI 成员）见
+[troubleshooting.md](troubleshooting.md) 的 v1.4.0 一节与
+`patches/05-engine-swap/build.sh` 的注释。

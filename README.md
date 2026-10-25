@@ -6,7 +6,7 @@
 这个项目把官方 TV 版（2.6.22）适配到了 Android 4.4，并且把**播放**这条链路真正修通：
 装好之后用法和官方版一样，扫码登录、选片、播放、续播、选集都能用。
 
-- **下载**：[Releases → v1.3.0](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.3.0)
+- **下载**：[Releases → v1.4.0](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.4.0)
 - 测试机：当贝 H1（Hi3798MV310，Android 4.4.2，armeabi-v7a，1080p）
 - 基于：网易爆米花 TV `2.6.22`
 
@@ -14,7 +14,8 @@
 
 | 版本 | 日期 | 阶段 | 内容 |
 | --- | --- | --- | --- |
-| **v1.3.0** | 2026-10-23 | 播放修复 | 固定 renderer=direct（修花屏/卡顿）、详情页优先 File 直连、OtherCover 直接播（**最新**） |
+| **v1.4.0** | 2026-10-26 | 硬件解码 | 换官方 VLC 3.6.2 引擎，接海思硬解（OMX.hisi），1080 级内容 CPU 10% 左右；4K 显示受限（见下）；顺带修触摸崩溃（**最新**） |
+| v1.3.0 | 2026-10-23 | 播放修复 | 固定 renderer=direct（修花屏/卡顿）、详情页优先 File 直连、OtherCover 直接播 |
 | v1.2.0 | 2026-10-22 | 画面显示 | 画布改 SurfaceView，修复电视端黑屏/只在 UI 处露画面 |
 | v1.1.0 | 2026-10-21 | 播放链路 | libvlc 加载、H.264 解码、音频、暂停/续播/选集 |
 | v1.0.0 | 2026-10-21 | API19 引导 | 能安装、启动、扫码登录、加载片库/海报墙（不能正常播放） |
@@ -30,8 +31,8 @@
 
 ## 安装
 
-1. 从 [Releases](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.3.0) 下载
-   `baomihua-tv-2.6.22-api19-1.3.0.apk`
+1. 从 [Releases](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.4.0) 下载
+   `baomihua-tv-2.6.22-api19-1.4.0.apk`
 2. **如果装过官方版，先卸载**（两者签名不同，直接覆盖会提示"应用未安装"）
 3. 用 U 盘、当贝市场或 adb 安装
 4. 打开应用，用手机扫码登录
@@ -40,7 +41,7 @@
 
 ```bash
 adb uninstall com.netease.filmlytv     # 装过官方版才需要
-adb install baomihua-tv-2.6.22-api19-1.3.0.apk
+adb install baomihua-tv-2.6.22-api19-1.4.0.apk
 ```
 
 ## 现在能做什么
@@ -56,11 +57,12 @@ adb install baomihua-tv-2.6.22-api19-1.3.0.apk
 | 选集（1-15 / 16-30 分页） | ✅ |
 | 画面显示（电视端） | ✅ v1.2.0 起走 SurfaceView 独立图层 |
 | 花屏 | ✅ v1.3.0 移除 `glconv=none`；H1 抓帧正常 |
-| 4K 卡顿 | ⚠️ VLC 软解 4K（CPU 高）；建议切 1080p |
+| 硬件解码（1080 级） | ✅ v1.4.0 起走海思 OMX.hisi 硬解，典型内容 CPU 约 10%（软件解码同内容约 60%） |
+| 4K 显示 | ⚠️ 4K 内容能硬解但官方 vout 在 4.4 上出不了画面（大片黑屏）。临时办法：播放器「清晰度」切到非「原画」 |
 | 片库点视频直接播放 | ✅ H1 验证详情页正常打开 |
 | 字幕菜单 | ⚠️ 界面在，未逐项确认 |
 | 音轨菜单 | ⚠️ 界面在，未逐项确认 |
-| 4K / HEVC | ⚠️ 4K H.264 软解卡顿；VLC 未接管 MediaCodec，建议 1080p |
+| HEVC / 其他编码 | ✅ 海思硬解组件覆盖 avc/hevc/mpeg2/mpeg4/vc1/wmv/avs/dolby-vision，VLC mediacodec 自动选取 |
 
 ## 常见问题
 
@@ -76,6 +78,12 @@ adb install baomihua-tv-2.6.22-api19-1.3.0.apk
 **播放时电视大面积黑，只有进度条/音量图标处露画面？**
 请升级到 v1.2.0 或更高。这个问题是 v1.1.0 的 `TextureView` 画布在该海思显示链路上
 不随视频帧上屏导致的，v1.2.0 已改用 `SurfaceView` 独立图层。
+
+**播放卡顿（v1.4.0 起）？**
+v1.4.0 换用官方 VLC 3.6.2 引擎并接通海思硬解：典型内容（1440×600/764 等）解码全部走硬件，
+CPU 从软解的 60%+ 降到约 10%。已知限制：**4K（3840×2160）能硬解但显示黑屏**——
+海思 H.264 硬解组件官方上限 1920×1088，4.4 的旧 vout 也扛不住 4K 缓冲区。
+临时办法：在播放器「清晰度」里切到非「原画」档。
 
 **画面是花的、还卡顿？**
 请升级到 v1.3.0。服务端可能给 API19 设备下发 `renderer=soft_gles2`，客户端据此
@@ -132,6 +140,11 @@ BASE=/path/to/baomihua-1.1.0.apk KEYSTORE=my.jks KEYSTORE_PASS_FILE=my.pass \
 # 阶段四：v1.2.0 -> v1.3.0（播放渲染 / 点击播放修复）
 BASE=/path/to/baomihua-1.2.0.apk KEYSTORE=my.jks KEYSTORE_PASS_FILE=my.pass \
   ./patches/04-fixes/build.sh
+
+# 阶段五：v1.3.0 -> v1.4.0（换官方 VLC 引擎接海思硬解）
+#   需要官方 VLC 3.6.2 armv7 APK 解出的三个库（见 docs/build.md 阶段五）
+OUT=out.apk KS_PASS_FILE=my.pass SWAPLIB=/path/to/vlc362/lib/armeabi-v7a \
+  ./patches/05-engine-swap/build.sh
 ```
 
 完整步骤见 [docs/build.md](docs/build.md)；遇到问题先看
@@ -146,6 +159,7 @@ patches/
   02-playback/   阶段二：播放链路（v1.1.0）
   03-display/    阶段三：画面显示（v1.2.0）
   04-fixes/      阶段四：播放渲染 / 点击播放修复（v1.3.0）
+  05-engine-swap/ 阶段五：换官方 VLC 引擎接海思硬解（v1.4.0）
 shim/         libcompat.c：补齐缺失的 28 个系统函数
 tools/        符号差集工具、截图脚本
 release/      发布说明与 SHA256SUMS（APK 走 GitHub Releases）
@@ -157,7 +171,7 @@ release/      发布说明与 SHA256SUMS（APK 走 GitHub Releases）
 - 当贝 H1 的系统截图功能（`screencap`）本身是坏的，与这个包无关；
   需要截图时用 `tools/shot.sh` 里的录屏取帧方案。
 - 只在当贝 H1 上验证过，其他 4.4 盒子可能需要额外适配。
-- v1.3.0 已在 H1 复验：详情页/点击正常、4K 抓帧无花屏；但 VLC 在 API19 上仍软解 4K，4K 会卡顿，建议用 1080p 版本。
+- v1.4.0 已在 H1 实测：海思硬解接管（mediaserver 日志 `OMX.hisi.video.decoder.avc`）、常规内容画面正常、CPU 约 10%；4K 内容显示黑屏（见 FAQ）；音轨/字幕菜单在 v1.4.0 里可能枚举异常（fork 与官方引擎的轨道描述协议有差异，不影响播放）。
 
 ## 免责声明
 

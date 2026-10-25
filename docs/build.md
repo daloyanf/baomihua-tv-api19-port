@@ -110,6 +110,39 @@ KEYSTORE_PASS_FILE=$HOME/.android-keys/walldav.pass \
 签名证书与 v1.2.0 相同，可直接 `adb install -r` 覆盖，登录态与缓存保留。
 原因与验证建议见 [patches/04-fixes/README.md](../patches/04-fixes/README.md)。
 
+## 阶段五（v1.4.0）：换官方 VLC 引擎接海思硬解
+
+前置：下载官方 VLC for Android 3.6.2 armv7 包并解出三个原生库
+（videolan 官方镜像：`vlc-android/3.6.2/VLC-Android-3.6.2-armeabi-v7a.apk`）：
+
+```bash
+unzip -o VLC-Android-3.6.2-armeabi-v7a.apk 'lib/armeabi-v7a/*' -d vlc362
+```
+
+构建：
+
+```bash
+OUT=baomihua-tv-2.6.22-api19-1.4.0.apk \
+KS_PASS_FILE=$HOME/.android-keys/walldav.pass \
+SWAPLIB=vlc362/lib/armeabi-v7a \
+./patches/05-engine-swap/build.sh
+```
+
+脚本内容（逐条理由写在 `build.sh` 头部注释里）：
+
+1. 替换 `libvlc.so` / `libvlcjni.so` / `libc++_shared.so` 为官方 3.6.2 构建；
+2. `HWDecoderUtil.getDecoderFromDevice()` 强制 `ALL`、`Media.getMediaCodecModule()`
+   固定 `mediacodec_jni`（fork 的 SDK 判级在 4.4 上错选 ndk 变体）；
+3. `Media.createStatsFromNative` 增加官方签名桥接（官方 JNI 回调签名与 fork 构造器
+   不同，缺了会 `NoSuchMethodError`）；4 个 Java→native 与 3 个日志 native 改桩；
+4. `AWindow.setBuffersGeometry` 补 `holder.setFormat/setFixedSize` 实现
+   （fork 的空桩导致显示几何无人设置）；
+5. `PlayerActivity` 注入 `--vout=android-opaque`（官方自动选 gles2 在本机 HWC 黑屏）；
+6. `o0.o.g(II)` 增 `NoSuchMethodError` catch（Dalvik 触摸崩溃）。
+
+签名证书与 v1.3.0 相同，可直接覆盖安装。真机验证口径与 4K 限制见
+[troubleshooting.md](troubleshooting.md) 的 v1.4.0 一节。
+
 ## 签名
 
 ```bash

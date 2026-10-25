@@ -8,6 +8,7 @@
 | v1.1.0 | 2026-10-21 | 阶段二：播放链路 | libvlc 加载、H.264 解码、音频、暂停/续播/选集 |
 | v1.2.0 | 2026-10-22 | 阶段三：画面显示 | 画布改 SurfaceView，修复电视端黑屏/只在 UI 处露画面 |
 | v1.3.0 | 2026-10-23 | 阶段四：播放修复 | 固定 renderer=direct（修花屏/卡顿）、详情页优先 File 直连、OtherCover 直接播 |
+| v1.4.0 | 2026-10-26 | 阶段五：硬件解码 | 换官方 VLC 3.6.2 引擎接海思硬解（OMX.hisi），1080 级内容 CPU≈10%；修触摸崩溃；4K 显示受限 |
 
 > 早期内部称呼里的 v1/v2/v4 已废弃：v1 → v1.0.0，v2 → v1.1.0，v4 → v1.2.0。
 > 当时的 v3 是一次未生效的中间构建（只改默认画布值、被配置覆盖），没有单独发布。
@@ -49,6 +50,22 @@
   硬解，但 VLC 3.0.21 在 API19 上未接管 MediaCodec（强制
   `--mediacodec` / `--codec=mediacodec,avcodec` 均无效）。音频解码开销小，
   所以“声音流畅、视频卡”。4K 建议切 1080p 版本；要 4K 硬解需换播放器或盒子。
+- **2026-10-24 → 10-26（阶段五，v1.4.0）**：用户反馈“解码还是有问题、播放特别卡”，
+  并提示“我在当贝装过高版本 VLC，可以把包里的 VLC 换成支持 4.4 的高版本”——这条线索
+  推翻了一个关键误判：此前看 `media_codecs.xml` 只有 OMX.google 就认为本机 MediaCodec
+  摸不到硬解，实测官方 VLC 3.6.2 在同机直接拉起 `OMX.hisi.video.decoder.avc`
+  （4K 解码 CPU 约 2%）。4.4 的 MediaCodec 会动态枚举 OMX IL 组件，配置文件不是全量清单。
+  方案定稿：把 APK 内的 `libvlc.so`/`libvlcjni.so`/`libc++_shared.so` 换成官方 3.6.2
+  的构建，并在 Java 层补齐 9 处接口差异（4 个 Java→native 改桩、3 个日志 native 改桩、
+  `Media.createStatsFromNative` 加官方签名桥接、`AWindow.setBuffersGeometry` 补真实
+  实现；AWindow 的两个 native 回调必须保持 native——官方用 RegisterNatives 动态绑定）。
+  另修 `getDecoderFromDevice`/`getMediaCodecModule` 的 API19 判级 bug、强制
+  `--vout=android-opaque`（官方自动选 gles2 在本机 HWC 黑屏）、补 `o0.o` 的
+  `NoSuchMethodError` catch（Dalvik 触摸崩溃）。真机实测 1080 级内容硬解接管、
+  CPU 约 10%，画面正常；**4K 能硬解但显示黑屏**（海思 avc 组件自报上限
+  1920×1088 + 4K RGBX 显示池超内存），临时办法是清晰度切非“原画”。
+  完整证据链见 [troubleshooting.md](troubleshooting.md) 的 v1.4.0 一节，
+  补丁见 `patches/05-engine-swap/`。
 
 ## 阶段一（v1.0.0）验证数据（供参考）
 

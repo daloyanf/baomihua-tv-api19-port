@@ -158,3 +158,59 @@ API19 组合下未生效。音频解码开销小，所以声音一直流畅。
    且缓冲队列随播放轮转；
 5. 最终以**电视实际画面**为准。`screenrecord` 只用于看应用缓冲内容，不能证明 HWC/OSD
    显示正常（见上文 v1.2.0 一节）。
+
+## v1.4.0：换官方 VLC 引擎接海思硬解（2026-10-26）
+
+### 结论链（全部真机实证）
+
+1. **软解根因**：fork 版 libvlc（网易自编译 3.0.21）在 API19 上 mediacodec 两种变体都初始化失败
+   （`MediaCodec NDK init failed` / `mediacodec jni#pf_init failed`），恒落 libavcodec。
+   解码器列表本身也有 bug：`AndroidUtil` 的 SDK 判级在 4.4 上错选 `mediacodec_ndk`（应 jni）。
+2. **硬解通路是存在的**：官方 VLC 3.6.2（同一 LibVLC 3.0.21）在同机 mediacodec_jni 正常，
+   实测 >4K H.264 直接拉起 `OMX.hisi.video.decoder.avc`，CPU 2%。
+   注意：`media_codecs.xml` 只注册了 OMX.google 软解，但框架 MediaCodec 会动态枚举
+   OMX IL 组件（`libOMX_Core.so`），海思硬解可用——**不能用 media_codecs.xml 判断有无硬解**。
+3. **换引擎的两个硬门槛**（都已解决）：
+   - 官方 libvlcjni 缺少 fork 的 9 个 JNI 成员：4 个 Java→native（nativeGetMetaExtra /
+     nativeGetBytePosition / nativeGetCodecInfo / nativeNextFrame）+ 3 个日志
+     （OkClient.nativeLog / VlcNativeLog.nativeLog / VLCUtil.log）→ Java 侧改桩；
+     另有 1 个 native→Java 回调签名不同（`Media.createStatsFromNative`，fork 把
+     displayedPictures/lostPictures 扩成 long 并加了 5 个新字段）→ 在 Media 里加官方签名桥接方法。
+   - **AWindow 的两个 native 回调不能桩**（`nativeOnMouseEvent/nativeOnWindowSize`）：
+     官方 C 用 `RegisterNatives` 动态绑定它们，桩掉即 `AndroidNativeWindow jni init failed`。
+4. **画面黑的两个原因**：
+   - 官方引擎自动选 `gles2` vout 在本机 HWC 合成不了（层 UNKNOWN）；
+     需强制 `--vout=android-opaque`（ANativeWindow 直出）。
+   - 旧 AWindow.setBuffersGeometry 被 fork 改成空桩：4K 缓冲进不了 1920 宽的窗口 →
+     层 1x1 黑屏。已改成 holder.setFormat+setFixedSize 实现（对 ≤1080 内容工作正常）。
+5. **4K 显示仍未解决**（解码没问题）：4K 输出要 26 帧 × RGBX 33MB 的 vout 池，
+   本机 1GB RAM 放不下；且海思 H.264 硬解组件自报上限 1920×1088（
+   `HISI_OMXVDEC: update_port_definitions: max width * height: 1920*1088`）。
+   现象：4K 内容黑屏但 CPU 仅 ~10%（解码在跑）。临时方案：清晰度切非「原画」。
+6. **音轨/字幕**：官方 `createTrackDescriptionFromNative` 传的是裸字符串（`"Disable"`/`"Track"`），
+   fork 的 `TrackDescription` 构造按 JSON 解析 → 菜单枚举抛 JSONException（非致命）。
+   播放不受影响；要修需给 fork Java 加字符串分支。
+
+### 构建（patches/05-engine-swap/build.sh）
+
+```bash
+# 前置：官方 VLC 3.6.2 armv7 APK 解出 libvlc.so/libvlcjni.so/libc++_shared.so 到 SWAPLIB
+OUT=/path/out.apk KS_PASS=<口令> ./patches/05-engine-swap/build.sh
+```
+
+补丁点（全部在 classes3.dex）：
+- `HWDecoderUtil.getDecoderFromDevice()` 强制 ALL；`Media.getMediaCodecModule()` 硬编码 `mediacodec_jni`
+- `Media.createStatsFromNative(IFIFIIIIIIIIIIF)` 桥接方法（smali 参数寄存器从末尾排，注意 .registers 布局）
+- `Media.nativeGetMetaExtra` / `MediaPlayer.nativeGetBytePosition|nativeGetCodecInfo|nativeNextFrame` 改桩
+- `OkClient.nativeLog` / `VlcNativeLog.nativeLog` / `VLCUtil.log` 改桩
+- `AWindow.setBuffersGeometry` 真实现（SurfaceHolder.setFormat+setFixedSize，带 Throwable 保护）
+- `o0.o.g(II)` 增 catch `NoSuchMethodError`（Dalvik 触摸崩溃）
+- PlayerActivity 参数列表注入 `--vout=android-opaque`
+
+### 验证口径
+
+- 解码走硬解：`logcat | grep HIOMX_CORE` 出现 `OMX.hisi.video.decoder.avc` +
+  `HISI_OMXVDEC: Init OMX component`
+- CPU：`top` 里 filmlytv 约 10%（软解同内容 57–76%）
+- 画面：`dumpsys SurfaceFlinger` 视频层 activeBuffer 为内容尺寸且 queued-frames 轮转；
+  screenrecord 截图有画面
