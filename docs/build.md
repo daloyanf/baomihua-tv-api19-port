@@ -143,6 +143,26 @@ SWAPLIB=vlc362/lib/armeabi-v7a \
 签名证书与 v1.3.0 相同，可直接覆盖安装。真机验证口径与 4K 限制见
 [troubleshooting.md](troubleshooting.md) 的 v1.4.0 一节。
 
+## 阶段六（v1.5.0）：清晰度/字幕/音轨菜单修复
+
+```bash
+BASE=../release/baomihua-tv-2.6.22-api19-1.4.0.apk \
+OUT=../release/baomihua-tv-2.6.22-api19-1.5.0.apk \
+KS_PASS=$(cat ~/.android-keys/walldav.pass) \
+./patches/06-tracks/build.sh
+```
+
+补丁点：
+
+1. `TrackDescription` 构造：官方 JNI 传纯文本时回填 name/desc（不再只当 JSON 解析）；
+2. `p0$a.e()` 行高钳制放宽（100→150dp、150→200dp）；
+3. `PlayerActivity.M()` 返回 0，选项网格不再被 80dp topMargin 推出屏幕；
+4. `p0$a.i()` 展开/收起改为 WRAP_CONTENT+GONE（弃用会算错高度的动画）；
+5. `r6/q0.c()` 给类别标题打 tag 并强制展开（所有类别常展开）；
+6. `r6/k0$a.d()` 占位按钮不可聚焦，options_list 也不可聚焦。
+
+真机验证与原因链见 [troubleshooting.md](troubleshooting.md) 的 v1.5.0 一节。
+
 ## 签名
 
 ```bash

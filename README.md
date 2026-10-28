@@ -4,9 +4,9 @@
 还停在 **Android 4.4**，官方包装不上，或者装上后一点播放就闪退。
 
 这个项目把官方 TV 版（2.6.22）适配到了 Android 4.4，并且把**播放**这条链路真正修通：
-装好之后用法和官方版一样，扫码登录、选片、播放、续播、选集都能用。
+装好之后用法和官方版一样，扫码登录、选片、播放、续播、选集、切换音轨都能用。
 
-- **下载**：[Releases → v1.4.0](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.4.0)
+- **下载**：[Releases → v1.5.0](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.5.0)
 - 测试机：当贝 H1（Hi3798MV310，Android 4.4.2，armeabi-v7a，1080p）
 - 基于：网易爆米花 TV `2.6.22`
 
@@ -14,7 +14,8 @@
 
 | 版本 | 日期 | 阶段 | 内容 |
 | --- | --- | --- | --- |
-| **v1.4.0** | 2026-10-26 | 硬件解码 | 换官方 VLC 3.6.2 引擎，接海思硬解（OMX.hisi），1080 级内容 CPU 10% 左右；4K 显示受限（见下）；顺带修触摸崩溃（**最新**） |
+| **v1.5.0** | 2026-10-27 | 轨道菜单 | 清晰度/字幕/音轨菜单可用：显示真实轨道名、面板可上下导航、选中即切换（**最新**） |
+| v1.4.0 | 2026-10-26 | 硬件解码 | 换官方 VLC 3.6.2 引擎，接海思硬解（OMX.hisi），1080 级内容 CPU 10% 左右；4K 显示受限（见下）；顺带修触摸崩溃 |
 | v1.3.0 | 2026-10-23 | 播放修复 | 固定 renderer=direct（修花屏/卡顿）、详情页优先 File 直连、OtherCover 直接播 |
 | v1.2.0 | 2026-10-22 | 画面显示 | 画布改 SurfaceView，修复电视端黑屏/只在 UI 处露画面 |
 | v1.1.0 | 2026-10-21 | 播放链路 | libvlc 加载、H.264 解码、音频、暂停/续播/选集 |
@@ -31,8 +32,8 @@
 
 ## 安装
 
-1. 从 [Releases](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.4.0) 下载
-   `baomihua-tv-2.6.22-api19-1.4.0.apk`
+1. 从 [Releases](https://github.com/daloyanf/baomihua-tv-api19-port/releases/tag/v1.5.0) 下载
+   `baomihua-tv-2.6.22-api19-1.5.0.apk`
 2. **如果装过官方版，先卸载**（两者签名不同，直接覆盖会提示"应用未安装"）
 3. 用 U 盘、当贝市场或 adb 安装
 4. 打开应用，用手机扫码登录
@@ -41,7 +42,7 @@
 
 ```bash
 adb uninstall com.netease.filmlytv     # 装过官方版才需要
-adb install baomihua-tv-2.6.22-api19-1.4.0.apk
+adb install baomihua-tv-2.6.22-api19-1.5.0.apk
 ```
 
 ## 现在能做什么
@@ -58,10 +59,10 @@ adb install baomihua-tv-2.6.22-api19-1.4.0.apk
 | 画面显示（电视端） | ✅ v1.2.0 起走 SurfaceView 独立图层 |
 | 花屏 | ✅ v1.3.0 移除 `glconv=none`；H1 抓帧正常 |
 | 硬件解码（1080 级） | ✅ v1.4.0 起走海思 OMX.hisi 硬解，典型内容 CPU 约 10%（软件解码同内容约 60%） |
-| 4K 显示 | ⚠️ 4K 内容能硬解但官方 vout 在 4.4 上出不了画面（大片黑屏）。临时办法：播放器「清晰度」切到非「原画」 |
+| 4K 显示 | ⚠️ 4K 内容能硬解但官方 vout 在 4.4 上出不了画面（大片黑屏）。「清晰度」只有源提供多版本时才有非「原画」选项（WebDAV/夸克直挂只有原画） |
 | 片库点视频直接播放 | ✅ H1 验证详情页正常打开 |
-| 字幕菜单 | ⚠️ 界面在，未逐项确认 |
-| 音轨菜单 | ⚠️ 界面在，未逐项确认 |
+| 字幕菜单 | ✅ v1.5.0 起可上下导航；有字幕轨时与音轨同一枚举/切换链路（测试片源无字幕轨，未做实际切换） |
+| 音轨菜单 | ✅ v1.5.0 起可上下导航并切换；显示真实轨道名（如 Chinese - [Chinese]） |
 | HEVC / 其他编码 | ✅ 海思硬解组件覆盖 avc/hevc/mpeg2/mpeg4/vc1/wmv/avs/dolby-vision，VLC mediacodec 自动选取 |
 
 ## 常见问题
@@ -83,7 +84,7 @@ adb install baomihua-tv-2.6.22-api19-1.4.0.apk
 v1.4.0 换用官方 VLC 3.6.2 引擎并接通海思硬解：典型内容（1440×600/764 等）解码全部走硬件，
 CPU 从软解的 60%+ 降到约 10%。已知限制：**4K（3840×2160）能硬解但显示黑屏**——
 海思 H.264 硬解组件官方上限 1920×1088，4.4 的旧 vout 也扛不住 4K 缓冲区。
-临时办法：在播放器「清晰度」里切到非「原画」档。
+临时办法：源的「清晰度」列表里有非「原画」档时切过去（115/123/Emby 转码等）；WebDAV/夸克直挂只有原画，无法在客户端降档。
 
 **画面是花的、还卡顿？**
 请升级到 v1.3.0。服务端可能给 API19 设备下发 `renderer=soft_gles2`，客户端据此
@@ -95,6 +96,11 @@ v1.3.0 不再采用服务端 renderer，固定走 `renderer=direct`，优先 Med
 （`BottomSheetBehavior` 的 `VerifyError`、API21 insets 回调、vector drawable
 不支持）；②详情页播放按钮优先走 `File` 直连（与最近观看同一条路径）；
 ③OtherCover 带 `File` 时直接起播，不再绕详情页。
+
+**字幕/音轨菜单怎么用？**
+播放中按「下键」打开选项面板；各类别现在是常展开的，继续按「下键」经过「字幕」到「音轨」，
+再用「左右键」选轨道、「确定键」切换。音轨/字幕轨由片源决定：文件里没有字幕轨时
+字幕行显示「暂无」；WebDAV 直挂的片源通常只有一个音轨、没有字幕。
 
 **能装在手机或新盒子上吗？**
 能装，但没必要——那些设备直接用官方版更好。
@@ -118,9 +124,18 @@ v1.3.0 不再采用服务端 renderer，固定走 `renderer=direct`，优先 Med
    清单见 [docs/api19.md](docs/api19.md)。画面链路另外改用 `SurfaceView`，
    见 [docs/troubleshooting.md](docs/troubleshooting.md)。
 
+再补两句：
+
+4. **换发动机**：包里自带的 VLC 是网易自编译版，mediacodec 在 4.4 上起不来（恒软解）。
+   v1.4.0 起换成官方 VLC 3.6.2 的三个原生库，接上海思硬解；代价是官方 JNI 与
+   原 Java 层有 9 处接口差异，逐条补齐（见 `patches/05-engine-swap/`）。
+5. **修轨道菜单**：官方引擎的轨道名是纯文本，原 Java 层按 JSON 解析所以名称丢失；
+   选项面板的行高/边距在老 Leanback 上算错，字幕、音轨行点不到。v1.5.0 逐条修掉
+   （见 `patches/06-tracks/`）。
+
 ## 自己构建
 
-三个阶段按顺序：
+六个阶段按顺序：
 
 ```bash
 # 依赖：apktool、smali/baksmali、Android build-tools、JDK、Zig 0.13、python3
@@ -145,6 +160,10 @@ BASE=/path/to/baomihua-1.2.0.apk KEYSTORE=my.jks KEYSTORE_PASS_FILE=my.pass \
 #   需要官方 VLC 3.6.2 armv7 APK 解出的三个库（见 docs/build.md 阶段五）
 OUT=out.apk KS_PASS_FILE=my.pass SWAPLIB=/path/to/vlc362/lib/armeabi-v7a \
   ./patches/05-engine-swap/build.sh
+
+# 阶段六：v1.4.0 -> v1.5.0（清晰度/字幕/音轨菜单修复）
+BASE=/path/to/baomihua-1.4.0.apk OUT=out.apk KS_PASS=my.pass \
+  ./patches/06-tracks/build.sh
 ```
 
 完整步骤见 [docs/build.md](docs/build.md)；遇到问题先看
@@ -160,6 +179,7 @@ patches/
   03-display/    阶段三：画面显示（v1.2.0）
   04-fixes/      阶段四：播放渲染 / 点击播放修复（v1.3.0）
   05-engine-swap/ 阶段五：换官方 VLC 引擎接海思硬解（v1.4.0）
+  06-tracks/     阶段六：清晰度/字幕/音轨菜单修复（v1.5.0）
 shim/         libcompat.c：补齐缺失的 28 个系统函数
 tools/        符号差集工具、截图脚本
 release/      发布说明与 SHA256SUMS（APK 走 GitHub Releases）
@@ -167,11 +187,12 @@ release/      发布说明与 SHA256SUMS（APK 走 GitHub Releases）
 
 ## 已知问题
 
-- 字幕、音轨菜单还没逐项人工确认（VLC 的轨道枚举本身已经跑通）。
+- v1.5.0 已在 H1 实测：音轨两项可聚焦、选中第二轨出现勾选并关闭面板；字幕行可到达，
+  无字幕轨时显示「暂无」。清晰度列表只有源端提供多版本时才有非原画选项。
 - 当贝 H1 的系统截图功能（`screencap`）本身是坏的，与这个包无关；
   需要截图时用 `tools/shot.sh` 里的录屏取帧方案。
 - 只在当贝 H1 上验证过，其他 4.4 盒子可能需要额外适配。
-- v1.4.0 已在 H1 实测：海思硬解接管（mediaserver 日志 `OMX.hisi.video.decoder.avc`）、常规内容画面正常、CPU 约 10%；4K 内容显示黑屏（见 FAQ）；音轨/字幕菜单在 v1.4.0 里可能枚举异常（fork 与官方引擎的轨道描述协议有差异，不影响播放）。
+- 4K 内容显示黑屏（见 FAQ），与 v1.4.0 相同。
 
 ## 免责声明
 

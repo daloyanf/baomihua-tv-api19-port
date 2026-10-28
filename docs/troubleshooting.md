@@ -189,7 +189,7 @@ API19 组合下未生效。音频解码开销小，所以声音一直流畅。
    现象：4K 内容黑屏但 CPU 仅 ~10%（解码在跑）。临时方案：清晰度切非「原画」。
 6. **音轨/字幕**：官方 `createTrackDescriptionFromNative` 传的是裸字符串（`"Disable"`/`"Track"`），
    fork 的 `TrackDescription` 构造按 JSON 解析 → 菜单枚举抛 JSONException（非致命）。
-   播放不受影响；要修需给 fork Java 加字符串分支。
+   播放不受影响；**v1.5.0 已加纯文本分支，见本文 v1.5.0 一节**。
 
 ### 构建（patches/05-engine-swap/build.sh）
 
@@ -214,3 +214,52 @@ OUT=/path/out.apk KS_PASS=<口令> ./patches/05-engine-swap/build.sh
 - CPU：`top` 里 filmlytv 约 10%（软解同内容 57–76%）
 - 画面：`dumpsys SurfaceFlinger` 视频层 activeBuffer 为内容尺寸且 queued-frames 轮转；
   screenrecord 截图有画面
+
+## v1.5.0：清晰度/字幕/音轨菜单（2026-10-27）
+
+### 现象
+
+- 「清晰度」只有「原画」可点；「字幕」「音轨」行里没有任何选项，或者
+- 按 DOWN 在「字幕」和「原画」之间来回跳，永远到不了「音轨」；
+- v1.4.0 日志里音轨名只剩「音轨 1/2」。
+
+### 根因（真机日志）
+
+1. **轨道名丢失**：官方 `libvlcjni` 的 `createTrackDescriptionFromNative` 传纯文本
+   （`Chinese - [Chinese]`、`Disable`），fork 的 `TrackDescription` 构造按 JSON 解析，
+   异常被 catch 后 name/desc/lang/uri/format 全 null。
+2. **类别行展开高度算少**：`p0$a.i()` 用「父行当前高 + 网格当前高」作为展开目标；
+   折叠行的 HorizontalGridView 被 50dp 父高限制，只测到约 44dp，展开后内容比行高多约 20px，
+   选项按钮压住下一行标题。Leanback 焦点搜索按几何中心就近选择，于是 DOWN 从「字幕」
+   跳回「原画」。
+3. **面板网格被 topMargin 推出屏幕**：`PlayerActivity.M()` 返回 80dp，被当作
+   `option_grid` 的 topMargin；面板容器只有 270dp 高，1080p 下网格底部超出屏幕约 80dp，
+   「音轨」行不可达。
+4. **折叠行仍抢焦点**：折叠只 `setAlpha(0)`，占位按钮（「暂无/加载中…」）和整个
+   options_list 仍可被焦点命中。
+
+### 修法（patches/06-tracks/build.sh）
+
+| 补丁 | 内容 |
+| --- | --- |
+| `TrackDescription` | JSON 解析失败时用 `jstring` 回填 name/desc，uri/lang/format 置空串 |
+| `p0$a.e()` | 行高上限 100dp→150dp、150dp→200dp（保险） |
+| `PlayerActivity.M()` | 返回值改 0，选项网格与面板顶部对齐 |
+| `p0$a.i()` | 展开=VISIBLE+WRAP_CONTENT+requestLayout；收起=GONE+50dp（忽略动画标志） |
+| `r6/q0.c()` | bind 时给类别标题打 `p0$b` tag，并强制该行展开（所有类别常展开） |
+| `r6/k0$a.d()` | 占位按钮 setFocusable(false)/setClickable(false)；options_list setFocusable(false) |
+
+### 验证
+
+```bash
+# 播放中按 DOWN 打开面板，再按 3 次 DOWN
+adb shell uiautomator dump /sdcard/ui.xml
+# 焦点应依次经过：字幕(title) -> 音轨(title) -> 音轨选项(option_btn)
+# 音轨选项文本应为真实轨道名；左右键换轨、确定键选中后面板自动关闭
+```
+
+H1 实测（2026-10-27）：《逃学威龙》MKV 2 条音轨，两项都显示
+`Chinese - [Chinese]`；选中第二项后出现蓝色勾选并关闭面板。该片无字幕轨，
+字幕行显示「暂无」；字幕的有轨场景与音轨共用同一套列表/切换代码，
+但手头没有带字幕轨的片源，未做实际切换验证。清晰度只有「原画」——
+WebDAV/夸克直挂不提供转码档，不是菜单故障。
